@@ -1,0 +1,92 @@
+private function sections()
+	{
+		if(!CModule::IncludeModule("iblock")) return false;
+		if(empty($this->iblockId)) return false;
+		$this->userTypeEntity();
+	
+		$arFilter = array("IBLOCK_ID" =>$this->iblockId);
+		$arSort = array("ID" => "ASC");
+		$arSelect = array("UF_ORIGINAL_ID", "ID");
+		
+		$rsSections = CIBlockSection::GetList($arSort, $arFilter, false, $arSelect);
+		while($arSection = $rsSections->GetNext())
+		{
+			$arIdSec[$arSection['UF_ORIGINAL_ID']] = $arSection['ID'];
+		}
+
+
+		if(empty($_SESSION['lastid']['sections'])){
+			$lastId = 0;
+		} else {
+			$lastId = $_SESSION['lastid']['sections'];
+		}
+		//получаем иерархию каталога
+		$Sections = $this->send("getSections", "products", $lastId);
+		if(!empty($Providers)) {
+			$_SESSION['lastid']['sections'] = max(array_keys($Sections));
+			echo '<script>
+			startCountdown();
+			function reload (){document.location.href = location.href};setTimeout("reload()", 2000);
+			</script>';
+
+		} else {
+			$_SESSION['lastid']['sections'] = 0;
+			echo 'Все необходимые каталоги добавлены и обновлены<br>';
+		}
+
+		// $arParams = array("replace_space"=>"-","replace_other"=>"-"); //для транслита
+		$countAdd = 0;
+		$countUpdate = 0;
+		foreach ($Sections as $kSec => $vSec) {
+			if(array_key_exists($vSec["ID"], $arIdSec)){
+				$ID = $arIdSec[$vSec["ID"]];
+			} else {
+				$ID = 0;
+			}
+			if(array_key_exists($vSec["IBLOCK_SECTION_ID"], $arIdSec)){
+				$IBLOCK_SECTION_ID = $arIdSec[$vSec["IBLOCK_SECTION_ID"]];
+			} else {
+				$IBLOCK_SECTION_ID = 0;
+			}
+			
+			$code = randString(2);
+			$arFields = array(
+				"SYNC" => true,
+				"IBLOCK_ID" => $this->iblockId,
+				"ID" => $ID,
+				"IBLOCK_SECTION_ID" => $IBLOCK_SECTION_ID,
+				// "CODE" => Cutil::translit($vSec['NAME'],"ru",$arParams),
+				"CODE" => $vSec['CODE'].$code,
+				"SORT" => $vSec['SORT'],
+				"NAME" => htmlspecialchars_decode($vSec['NAME']),
+				"ACTIVE" => $vSec['ACTIVE'],
+				"DESCRIPTION" => $vSec['DESCRIPTION'],
+				"DESCRIPTION_TYPE" => $vSec['DESCRIPTION_TYPE'],
+				"UF_ORIGINAL_ID" => $vSec['ID'],
+				"UF_ORIGINAL_SEC_ID" => $vSec['IBLOCK_SECTION_ID']
+			);
+
+			$bs = new CIBlockSection;
+			if($ID > 0)
+			{
+			    $res = $bs->Update($ID, $arFields, false);
+			    if($res) $countUpdate++;
+			}
+			else
+			{
+			    $ID = $bs->Add($arFields, false);
+			    $res = ($ID > 0);
+			    if($res){
+			    	$countAdd++;
+			    	$arIdSec[$vSec['ID']] = $ID;
+				}
+			}
+			if(!$res) echo $bs->LAST_ERROR;
+		}
+		CIBlockSection::ReSort($this->iblockId);
+
+	if(count($arIdSec)>0) echo count($arIdSec).' элементов в базе<br>';
+	if($countAdd) echo 'Добавлено '.$countAdd.' элементов<br>';
+	if($countUpdate) echo 'Обновлено '.$countUpdate.' элементов<br>';
+
+	}
